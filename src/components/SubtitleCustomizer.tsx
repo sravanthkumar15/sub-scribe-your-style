@@ -30,6 +30,7 @@ const SubtitleCustomizer = () => {
     fontSize: 24,
     highlightColor: "#ffff00",
   });
+  const [status, setStatus] = useState<string>("Ready");
 
   // Check if we're in a browser extension context
   const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage;
@@ -40,6 +41,7 @@ const SubtitleCustomizer = () => {
       chrome.storage.sync.get(['subtitleStyle'], (result: ChromeStorageResult) => {
         if (result.subtitleStyle) {
           setSubtitleStyle(result.subtitleStyle);
+          setStatus("Settings loaded");
         }
       });
     }
@@ -50,20 +52,32 @@ const SubtitleCustomizer = () => {
     setSubtitleStyle(newStyle);
     if (isChromeExtension) {
       chrome.storage.sync.set({ subtitleStyle: newStyle });
+      setStatus("Saving settings...");
+      
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
           chrome.tabs.sendMessage(tabs[0].id, {
             type: 'UPDATE_STYLES',
             styles: newStyle
+          }, () => {
+            setStatus("Settings applied");
           });
+        } else {
+          setStatus("No YouTube tab found");
         }
       });
+      
       toast({
         title: "Settings saved",
         description: "Your subtitle customization has been updated.",
       });
     }
   };
+
+  // Debug UI to show if we're running as an extension
+  const extensionStatus = isChromeExtension ? 
+    "Running as extension" : 
+    "Running in development mode";
 
   return (
     <div className="w-[400px] bg-gray-900 text-white p-4">
@@ -111,6 +125,10 @@ const SubtitleCustomizer = () => {
               max={48}
               step={1}
             />
+          </div>
+          
+          <div className="mt-4 text-xs text-gray-400">
+            Status: {status} ({extensionStatus})
           </div>
         </div>
       </Card>

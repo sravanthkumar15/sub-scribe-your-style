@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true, // Clean the dist folder before building
+    emptyOutDir: false, // Don't clean the dist folder to preserve our icons
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -24,7 +24,9 @@ export default defineConfig(({ mode }) => ({
           return chunkInfo.name === 'content' ? '[name].js' : 'assets/[name]-[hash].js';
         }
       }
-    }
+    },
+    // Set the base URL to make asset paths relative instead of absolute
+    base: './'
   },
   plugins: [
     react(),
@@ -37,7 +39,7 @@ export default defineConfig(({ mode }) => ({
           fs.mkdirSync('dist', { recursive: true });
         }
         
-        // Copy manifest.json to dist folder with explicit error handling
+        // Copy manifest.json to dist folder
         try {
           console.log('Copying manifest.json to dist folder');
           fs.copyFileSync(
