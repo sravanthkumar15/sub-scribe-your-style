@@ -5,6 +5,8 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { RefreshCcw } from "lucide-react";
 
 // Define the type for our subtitle style
 interface SubtitleStyleType {
@@ -31,6 +33,7 @@ const SubtitleCustomizer = () => {
     highlightColor: "#ffff00",
   });
   const [status, setStatus] = useState<string>("Ready");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Check if we're in a browser extension context
   const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage;
@@ -71,6 +74,38 @@ const SubtitleCustomizer = () => {
         title: "Settings saved",
         description: "Your subtitle customization has been updated.",
       });
+    }
+  };
+
+  // Force refresh subtitles
+  const handleForceRefresh = () => {
+    setIsLoading(true);
+    setStatus("Refreshing subtitles...");
+    
+    if (isChromeExtension) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'FORCE_REFRESH'
+          }, () => {
+            setStatus("Subtitles refreshed");
+            setIsLoading(false);
+            
+            toast({
+              title: "Subtitles refreshed",
+              description: "If subtitles still don't appear, try refreshing the YouTube page.",
+            });
+          });
+        } else {
+          setStatus("No YouTube tab found");
+          setIsLoading(false);
+        }
+      });
+    } else {
+      setTimeout(() => {
+        setStatus("Dev mode: Refresh simulated");
+        setIsLoading(false);
+      }, 1000);
     }
   };
 
@@ -126,6 +161,16 @@ const SubtitleCustomizer = () => {
               step={1}
             />
           </div>
+          
+          <Button 
+            variant="outline" 
+            className="w-full mt-2" 
+            onClick={handleForceRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            {isLoading ? "Refreshing..." : "Refresh Subtitles"}
+          </Button>
           
           <div className="mt-4 text-xs text-gray-400">
             Status: {status} ({extensionStatus})
