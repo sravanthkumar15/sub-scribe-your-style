@@ -3,9 +3,9 @@
 
 // Configuration
 const DEBUG = true; // Set to false in production
-const SUBTITLE_CHECK_INTERVAL = 250; // ms (reduced for faster response)
+const SUBTITLE_CHECK_INTERVAL = 100; // ms (reduced for faster response)
 const MAX_RETRIES = 30;
-const POSITION_CHECK_INTERVAL = 1000; // Check positioning every second
+const POSITION_CHECK_INTERVAL = 500; // Check positioning more frequently
 
 // Debug logger
 function log(...args) {
@@ -104,6 +104,12 @@ async function updateCustomSubtitles() {
   
   // Create custom container if it doesn't exist
   if (!customContainer) {
+    // First, try to remove any existing container to avoid duplicates
+    const existingContainer = document.getElementById('youtube-subtitle-customizer');
+    if (existingContainer) {
+      existingContainer.remove();
+    }
+    
     // Create our custom container
     customContainer = document.createElement('div');
     customContainer.id = 'youtube-subtitle-customizer';
@@ -113,14 +119,21 @@ async function updateCustomSubtitles() {
     customContainer.style.right = '0';
     customContainer.style.width = '100%';
     customContainer.style.textAlign = 'center';
-    customContainer.style.zIndex = '2147483647'; // Maximum z-index value
+    customContainer.style.zIndex = '9999999'; // Very high z-index
     customContainer.style.pointerEvents = 'none'; // Don't block clicks
     customContainer.style.display = 'flex';
     customContainer.style.justifyContent = 'center';
     customContainer.style.alignItems = 'flex-end';
     
-    videoContainer.appendChild(customContainer);
-    log('Created custom subtitle container');
+    // Add it directly to the video container for best positioning
+    if (videoContainer) {
+      videoContainer.appendChild(customContainer);
+      log('Created custom subtitle container in video container');
+    } else {
+      // Fallback to document.body if videoContainer not found
+      document.body.appendChild(customContainer);
+      log('Created custom subtitle container in body (fallback)');
+    }
     
     // Start position checking interval
     if (!positionInterval) {
@@ -143,13 +156,15 @@ async function updateCustomSubtitles() {
       color: ${style.color};
       background-color: ${style.backgroundColor}${opacityHex};
       font-size: ${style.fontSize}px;
-      padding: 4px 8px;
+      padding: 6px 10px;
+      margin-bottom: 60px;
       border-radius: 4px;
       text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
       font-family: Arial, sans-serif;
+      font-weight: bold;
       max-width: 80%;
-      margin: 0 auto;
-      margin-bottom: 40px;
+      line-height: 1.3;
+      transition: all 0.2s ease-in-out;
     ">
       ${subtitleText}
     </div>
@@ -169,28 +184,32 @@ function hideOriginalSubtitles() {
     const selectors = [
       '.ytp-caption-window-container',
       '.caption-window',
-      '.captions-text'
+      '.captions-text',
+      '.ytp-caption-segment'
     ];
     
     selectors.forEach(selector => {
-      const element = document.querySelector(selector);
-      if (element) {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(element => {
         element.style.opacity = '0';
         element.style.visibility = 'hidden';
-        log(`Hidden original subtitles with selector: ${selector}`);
-      }
+        element.style.display = 'none'; // More aggressive hiding
+      });
     });
     
     // Also try to add a style tag for broader coverage
-    const styleTag = document.createElement('style');
-    styleTag.id = 'youtube-subtitle-customizer-styles';
-    styleTag.textContent = `
-      .ytp-caption-window-container, .caption-window, .captions-text {
-        opacity: 0 !important;
-        visibility: hidden !important;
-      }
-    `;
-    document.head.appendChild(styleTag);
+    if (!document.getElementById('youtube-subtitle-customizer-styles')) {
+      const styleTag = document.createElement('style');
+      styleTag.id = 'youtube-subtitle-customizer-styles';
+      styleTag.textContent = `
+        .ytp-caption-window-container, .caption-window, .captions-text, .ytp-caption-segment {
+          opacity: 0 !important;
+          visibility: hidden !important;
+          display: none !important;
+        }
+      `;
+      document.head.appendChild(styleTag);
+    }
     
     isOriginalSubtitleHidden = true;
     log('Hidden original subtitles');
@@ -207,15 +226,22 @@ function checkSubtitlePosition() {
   const isFullscreen = document.fullscreenElement !== null || 
                       (player && player.classList.contains('ytp-fullscreen'));
   const isTheaterMode = player && player.classList.contains('ytp-big-mode');
+  const isEmbedded = window.location.hostname !== 'www.youtube.com';
   
   // Adjust position based on player mode
   if (isFullscreen) {
-    customContainer.style.bottom = '80px'; // More space in fullscreen
+    customContainer.style.bottom = '15%'; // More space in fullscreen
+    customContainer.querySelector('div').style.marginBottom = '90px';
   } else if (isTheaterMode) {
-    customContainer.style.bottom = '60px';
+    customContainer.style.bottom = '12%';
+    customContainer.querySelector('div').style.marginBottom = '70px';
   } else {
-    customContainer.style.bottom = '40px';
+    customContainer.style.bottom = '10%';
+    customContainer.querySelector('div').style.marginBottom = '60px';
   }
+  
+  // Make sure container is visible and positioned correctly
+  customContainer.style.display = 'flex';
   
   log('Updated subtitle position. Fullscreen:', isFullscreen, 'Theater:', isTheaterMode);
 }
@@ -225,13 +251,23 @@ function initialize() {
   log('Initializing YouTube Subtitle Customizer');
   
   // Reset state
+  if (customContainer) {
+    customContainer.remove();
+  }
   customContainer = null;
   retryCount = 0;
   isOriginalSubtitleHidden = false;
   lastSubtitleText = '';
   
+  // Clear any existing intervals
+  if (checkInterval) clearInterval(checkInterval);
+  if (positionInterval) clearInterval(positionInterval);
+  
   // Start checking for subtitles
   checkInterval = setInterval(updateCustomSubtitles, SUBTITLE_CHECK_INTERVAL);
+  
+  // Force an immediate check
+  setTimeout(updateCustomSubtitles, 100);
   
   // Listen for style updates from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -268,6 +304,9 @@ const handleNavigation = () => {
   // Restart intervals
   checkInterval = setInterval(updateCustomSubtitles, SUBTITLE_CHECK_INTERVAL);
   positionInterval = setInterval(checkSubtitlePosition, POSITION_CHECK_INTERVAL);
+  
+  // Force an immediate check
+  setTimeout(updateCustomSubtitles, 100);
 };
 
 // Watch for YouTube navigation
