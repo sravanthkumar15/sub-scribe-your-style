@@ -1,24 +1,16 @@
 // YouTube Subtitle Customizer - Content Script
-// 
-// The approach:
-// 1. We use a MutationObserver to detect when captions appear
-// 2. We create our own overlay for custom subtitles
-// 3. We position our captions at the bottom of the video player
-// 4. We use targeted selectors to identify actual subtitle elements
 
 // Configuration
-const DEBUG = true; // Set to false for production
-let debugMode = false;
+const DEBUG = true; // Always enable debugging for now
+let debugMode = true;
 let debugInfo = [];
 
-// Simple logging function
+// Simple logging function with more visibility
 function log(...args) {
-  if (DEBUG || debugMode) {
-    console.log('[YouTube Subtitle Customizer]', ...args);
-    // Keep last 20 logs for debugging
-    debugInfo.unshift(new Date().toISOString().substring(11, 19) + ': ' + args.join(' '));
-    if (debugInfo.length > 20) debugInfo.pop();
-  }
+  console.log('%c[YouTube Subtitle Customizer]', 'background: #9146FF; color: white; padding: 2px 4px; border-radius: 2px;', ...args);
+  // Keep last 20 logs for debugging
+  debugInfo.unshift(new Date().toISOString().substring(11, 19) + ': ' + args.join(' '));
+  if (debugInfo.length > 20) debugInfo.pop();
 }
 
 // State
@@ -322,6 +314,20 @@ function updateSubtitlePosition() {
   }
 }
 
+// A direct way to test if our overlay works - will show a test message
+function showTestSubtitle() {
+  const testMessage = "This is a test subtitle from the extension - " + new Date().toLocaleTimeString();
+  log('Showing test subtitle:', testMessage);
+  
+  updateCustomSubtitles(testMessage, {
+    color: "#ffff00", // Yellow text for visibility
+    backgroundColor: "#000000",
+    backgroundOpacity: 80,
+    fontSize: 28,
+    highlightColor: "#ffffff"
+  });
+}
+
 // Check if video is ready and has subtitles enabled
 function checkIfSubtitlesEnabled() {
   // Check for the presence of the CC button in an "on" state
@@ -357,6 +363,12 @@ function processVideo() {
   
   // Start position update interval
   startPositionUpdateInterval();
+  
+  // Show a test subtitle immediately
+  showTestSubtitle();
+  
+  // And another one after 2 seconds to make sure it's visible
+  setTimeout(showTestSubtitle, 2000);
 }
 
 // Check frequently if video state changed (play/pause/etc)
@@ -377,6 +389,11 @@ function startVideoCheck() {
         const subtitleText = getSubtitleText();
         if (subtitleText) {
           updateCustomSubtitles(subtitleText);
+        } else {
+          // If no natural subtitles found, show a test one occasionally
+          if (Math.random() < 0.1) { // 10% chance each check
+            showTestSubtitle();
+          }
         }
       }
     }
@@ -514,6 +531,8 @@ function forceRefresh() {
       log('Found subtitles after force refresh:', subtitleText);
     } else {
       log('No subtitles found after force refresh');
+      // Show a test subtitle anyway
+      showTestSubtitle();
     }
   }, 500);
 }
@@ -616,6 +635,18 @@ if (document.readyState === 'loading') {
   initialize();
   urlObserver.observe(document, { subtree: true, childList: true });
 }
+
+// Add a global debug function that users can call from the console
+window.YTSubDebug = {
+  showTest: showTestSubtitle,
+  forceRefresh: forceRefresh,
+  getInfo: () => debugInfo.join('\n'),
+  toggleDebug: () => {
+    debugMode = !debugMode;
+    log('Debug mode toggled to:', debugMode);
+    return debugMode;
+  }
+};
 
 // Log that we've loaded
 log('Content script loaded successfully');

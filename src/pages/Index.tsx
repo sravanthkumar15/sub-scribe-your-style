@@ -8,6 +8,7 @@ export default function Index() {
     <div className="min-h-screen w-full bg-background">
       <div className="container mx-auto py-4">
         <SubtitleCustomizer />
+        <SubtitlesDialog />
       </div>
     </div>
   );
