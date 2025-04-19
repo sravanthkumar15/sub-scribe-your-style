@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 // Define the type for our subtitle style
@@ -14,6 +13,12 @@ interface SubtitleStyleType {
   backgroundOpacity: number;
   fontSize: number;
   highlightColor: string;
+}
+
+// Define storage result type
+interface ChromeStorageResult {
+  subtitleStyle?: SubtitleStyleType;
+  [key: string]: any;
 }
 
 const SubtitleCustomizer = () => {
@@ -32,7 +37,7 @@ const SubtitleCustomizer = () => {
   // Load saved settings
   useEffect(() => {
     if (isChromeExtension) {
-      chrome.storage.sync.get(['subtitleStyle'], (result: { subtitleStyle?: SubtitleStyleType }) => {
+      chrome.storage.sync.get(['subtitleStyle'], (result: ChromeStorageResult) => {
         if (result.subtitleStyle) {
           setSubtitleStyle(result.subtitleStyle);
         }
