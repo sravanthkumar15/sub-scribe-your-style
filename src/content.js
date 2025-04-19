@@ -3,8 +3,8 @@
 
 // Configuration
 const DEBUG = true; // Set to false in production
-const SUBTITLE_CHECK_INTERVAL = 1000; // ms
-const MAX_RETRIES = 10;
+const SUBTITLE_CHECK_INTERVAL = 500; // ms (reduced for faster response)
+const MAX_RETRIES = 20;
 
 // Debug logger
 function log(...args) {
@@ -17,6 +17,8 @@ function log(...args) {
 let customContainer = null;
 let retryCount = 0;
 let checkInterval = null;
+let lastSubtitleText = '';
+let isOriginalSubtitleHidden = false;
 
 // Load saved styles
 function getSubtitleStyles() {
@@ -42,6 +44,7 @@ function findSubtitleContainer() {
     '.ytp-caption-window-container',
     '.captions-text',
     '.caption-window',
+    '.ytp-caption-segment',
     // Add more selectors if YouTube changes their structure
   ];
   
@@ -66,7 +69,9 @@ async function updateCustomSubtitles() {
     if (retryCount > MAX_RETRIES) {
       log('Gave up looking for subtitle container after', MAX_RETRIES, 'attempts');
       clearInterval(checkInterval);
+      return;
     }
+    log('No subtitle container found, retry', retryCount, 'of', MAX_RETRIES);
     return;
   }
   
@@ -76,19 +81,21 @@ async function updateCustomSubtitles() {
   // Get subtitle text
   const subtitleText = subtitleContainer.textContent?.trim() || '';
   
-  // Skip if no text or container
-  if (!subtitleText || !videoContainer) {
+  // Skip if no text or container or if text hasn't changed
+  if (!subtitleText || !videoContainer || (subtitleText === lastSubtitleText && customContainer)) {
     return;
   }
+  
+  // Update last seen text
+  lastSubtitleText = subtitleText;
+  
+  log('Updating subtitles with text:', subtitleText);
   
   // Get saved styles
   const style = await getSubtitleStyles();
   
   // Create custom container if it doesn't exist
   if (!customContainer) {
-    // Hide original subtitles
-    subtitleContainer.style.opacity = '0';
-    
     // Create our custom container
     customContainer = document.createElement('div');
     customContainer.id = 'youtube-subtitle-customizer';
@@ -101,6 +108,18 @@ async function updateCustomSubtitles() {
     
     videoContainer.appendChild(customContainer);
     log('Created custom subtitle container');
+  }
+  
+  // Hide original subtitles only once
+  if (!isOriginalSubtitleHidden) {
+    // Important: Apply style to the parent element that contains all captions
+    const captionWindowContainer = document.querySelector('.ytp-caption-window-container');
+    if (captionWindowContainer) {
+      captionWindowContainer.style.opacity = '0';
+      captionWindowContainer.style.visibility = 'hidden';
+      isOriginalSubtitleHidden = true;
+      log('Hidden original subtitles');
+    }
   }
   
   // Convert opacity percentage to hex
@@ -125,11 +144,19 @@ async function updateCustomSubtitles() {
       ${subtitleText}
     </div>
   `;
+  
+  log('Updated custom subtitles');
 }
 
 // Initialize extension
 function initialize() {
   log('Initializing YouTube Subtitle Customizer');
+  
+  // Reset state
+  customContainer = null;
+  retryCount = 0;
+  isOriginalSubtitleHidden = false;
+  lastSubtitleText = '';
   
   // Start checking for subtitles
   checkInterval = setInterval(updateCustomSubtitles, SUBTITLE_CHECK_INTERVAL);
@@ -145,33 +172,43 @@ function initialize() {
     }
   });
   
-  // Handle page navigation (for YouTube's SPA behavior)
-  const handleNavigation = () => {
-    log('URL changed, resetting subtitle customizer');
-    if (customContainer) {
-      customContainer.remove();
-      customContainer = null;
-    }
-    retryCount = 0;
-    
-    // Clear and restart interval
-    clearInterval(checkInterval);
-    checkInterval = setInterval(updateCustomSubtitles, SUBTITLE_CHECK_INTERVAL);
-  };
-  
-  // Watch for YouTube navigation
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      handleNavigation();
-    }
-  }).observe(document, { subtree: true, childList: true });
+  log('Message listener set up successfully');
+  log('Extension is active');
 }
+
+// Handle page navigation (for YouTube's SPA behavior)
+const handleNavigation = () => {
+  log('URL changed, resetting subtitle customizer');
+  if (customContainer) {
+    customContainer.remove();
+    customContainer = null;
+  }
+  
+  retryCount = 0;
+  isOriginalSubtitleHidden = false;
+  lastSubtitleText = '';
+  
+  // Clear and restart interval
+  clearInterval(checkInterval);
+  checkInterval = setInterval(updateCustomSubtitles, SUBTITLE_CHECK_INTERVAL);
+};
+
+// Watch for YouTube navigation
+let lastUrl = location.href;
+const observer = new MutationObserver(() => {
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
+    handleNavigation();
+  }
+});
 
 // Run the initializer when the page is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initialize);
+  document.addEventListener('DOMContentLoaded', () => {
+    initialize();
+    observer.observe(document, { subtree: true, childList: true });
+  });
 } else {
   initialize();
+  observer.observe(document, { subtree: true, childList: true });
 }
