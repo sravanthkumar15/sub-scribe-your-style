@@ -1,4 +1,3 @@
-
 // YouTube Subtitle Customizer - Content Script
 // 
 // The approach:
@@ -241,6 +240,14 @@ async function updateCustomSubtitles(subtitleText, style) {
   
   // Update last text
   lastSubtitleText = subtitleText;
+  
+  // Send subtitle to our React app
+  if (chrome?.runtime?.sendMessage) {
+    chrome.runtime.sendMessage({
+      type: 'SUBTITLE_TEXT',
+      text: subtitleText
+    });
+  }
   
   // Convert opacity percentage to hex
   const opacityHex = Math.round(style.backgroundOpacity * 2.55)
@@ -612,4 +619,3 @@ if (document.readyState === 'loading') {
 
 // Log that we've loaded
 log('Content script loaded successfully');
-

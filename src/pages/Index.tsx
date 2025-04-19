@@ -1,12 +1,10 @@
 
-import SubtitleCustomizer from "@/components/SubtitleCustomizer";
+import { SubtitlesDialog } from "@/components/SubtitlesDialog";
 
-const Index = () => {
+export default function Index() {
   return (
-    <div className="min-h-screen bg-gray-900">
-      <SubtitleCustomizer />
+    <div className="min-h-screen bg-background">
+      <SubtitlesDialog />
     </div>
   );
-};
-
-export default Index;
+}
