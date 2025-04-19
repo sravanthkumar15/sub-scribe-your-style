@@ -7,9 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
+// Define the type for our subtitle style
+interface SubtitleStyleType {
+  color: string;
+  backgroundColor: string;
+  backgroundOpacity: number;
+  fontSize: number;
+  highlightColor: string;
+}
+
 const SubtitleCustomizer = () => {
   const { toast } = useToast();
-  const [subtitleStyle, setSubtitleStyle] = useState({
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyleType>({
     color: "#ffffff",
     backgroundColor: "#000000",
     backgroundOpacity: 75,
@@ -23,7 +32,7 @@ const SubtitleCustomizer = () => {
   // Load saved settings
   useEffect(() => {
     if (isChromeExtension) {
-      chrome.storage.sync.get(['subtitleStyle'], (result) => {
+      chrome.storage.sync.get(['subtitleStyle'], (result: { subtitleStyle?: SubtitleStyleType }) => {
         if (result.subtitleStyle) {
           setSubtitleStyle(result.subtitleStyle);
         }
@@ -32,7 +41,7 @@ const SubtitleCustomizer = () => {
   }, []);
 
   // Save settings and notify content script
-  const handleStyleChange = (newStyle: typeof subtitleStyle) => {
+  const handleStyleChange = (newStyle: SubtitleStyleType) => {
     setSubtitleStyle(newStyle);
     if (isChromeExtension) {
       chrome.storage.sync.set({ subtitleStyle: newStyle });
