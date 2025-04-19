@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
   },
   build: {
+    outDir: 'dist',
+    emptyOutDir: true, // Clean the dist folder before building
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -30,18 +32,24 @@ export default defineConfig(({ mode }) => ({
     {
       name: 'copy-extension-files',
       buildEnd() {
+        // Ensure dist directory exists
         if (!fs.existsSync('dist')) {
-          fs.mkdirSync('dist');
+          fs.mkdirSync('dist', { recursive: true });
         }
         
-        // Copy manifest.json to dist folder
-        fs.copyFileSync(
-          resolve(__dirname, 'src/manifest.json'),
-          resolve(__dirname, 'dist/manifest.json')
-        );
+        // Copy manifest.json to dist folder with explicit error handling
+        try {
+          console.log('Copying manifest.json to dist folder');
+          fs.copyFileSync(
+            resolve(__dirname, 'src/manifest.json'),
+            resolve(__dirname, 'dist/manifest.json')
+          );
+          console.log('manifest.json copied successfully');
+        } catch (err) {
+          console.error('Error copying manifest.json:', err);
+        }
 
         // Ensure content.js is also available in the right location
-        // The rollup config should handle this, but let's make sure as a fallback
         try {
           if (fs.existsSync(resolve(__dirname, 'dist/content.js'))) {
             console.log('Content script successfully bundled by rollup');
@@ -51,6 +59,7 @@ export default defineConfig(({ mode }) => ({
               resolve(__dirname, 'src/content.js'),
               resolve(__dirname, 'dist/content.js')
             );
+            console.log('content.js copied successfully');
           }
         } catch (err) {
           console.error('Error handling content script:', err);
