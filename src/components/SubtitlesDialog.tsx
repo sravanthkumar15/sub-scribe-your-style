@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -37,8 +38,11 @@ export function SubtitlesDialog() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[600px] bg-white dark:bg-gray-800">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold mb-4">Live Subtitles</DialogTitle>
-          <div className="flex items-center space-x-2 mb-4">
+          <DialogTitle className="text-xl font-semibold mb-2">Live Subtitles</DialogTitle>
+          <DialogDescription className="text-sm text-gray-500 dark:text-gray-400">
+            View subtitles captured from your current YouTube video.
+          </DialogDescription>
+          <div className="flex items-center space-x-2 my-4">
             <Switch
               id="subtitle-switch"
               checked={isEnabled}
