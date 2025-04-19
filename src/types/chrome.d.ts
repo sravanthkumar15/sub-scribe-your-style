@@ -30,9 +30,10 @@ declare namespace chrome {
   
   export namespace runtime {
     export function sendMessage(message: any, callback?: (response: any) => void): void;
-    export function onMessage: {
+    export interface OnMessageEvent {
       addListener(callback: (message: any, sender: any, sendResponse: (response?: any) => void) => void): void;
       removeListener(callback: (message: any, sender: any, sendResponse: (response?: any) => void) => void): void;
-    };
+    }
+    export var onMessage: OnMessageEvent;
   }
 }
