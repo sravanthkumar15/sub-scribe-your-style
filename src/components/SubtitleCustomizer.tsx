@@ -17,9 +17,12 @@ const SubtitleCustomizer = () => {
     highlightColor: "#ffff00",
   });
 
+  // Check if we're in a browser extension context
+  const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage;
+
   // Load saved settings
   useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
+    if (isChromeExtension) {
       chrome.storage.sync.get(['subtitleStyle'], (result) => {
         if (result.subtitleStyle) {
           setSubtitleStyle(result.subtitleStyle);
@@ -31,7 +34,7 @@ const SubtitleCustomizer = () => {
   // Save settings and notify content script
   const handleStyleChange = (newStyle: typeof subtitleStyle) => {
     setSubtitleStyle(newStyle);
-    if (typeof chrome !== 'undefined' && chrome.storage) {
+    if (isChromeExtension) {
       chrome.storage.sync.set({ subtitleStyle: newStyle });
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
