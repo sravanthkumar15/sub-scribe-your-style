@@ -1,10 +1,11 @@
+
 // YouTube Subtitle Customizer - Content Script
 // 
 // The approach:
 // 1. We use a MutationObserver to detect when captions appear
-// 2. We don't try to hide the original captions, just create our own overlay
+// 2. We create our own overlay for custom subtitles
 // 3. We position our captions at the bottom of the video player
-// 4. We use simple, reliable DOM operations
+// 4. We use targeted selectors to identify actual subtitle elements
 
 // Configuration
 const DEBUG = true; // Set to false for production
@@ -27,7 +28,7 @@ let currentVideoId = null;
 let lastSubtitleText = '';
 let subtitleObserver = null;
 let positionInterval = null;
-let subtitleCheckInterval = null;
+let videoCheckInterval = null;
 
 // Default styles
 const defaultSubtitleStyle = {
@@ -70,46 +71,70 @@ function getYouTubeVideoId() {
   return urlParams.get('v');
 }
 
-// Find the YouTube subtitle element using multiple approaches
-function findSubtitleElement() {
-  // First method: look for specific YouTube subtitle selectors
-  const selectors = [
-    '.ytp-caption-segment',                // Most common
-    '.captions-text',                      // Alternative
-    '.caption-window',                     // Another alternative
-    '.ytp-caption-window-container',       // Container
-    '[class*="caption"] span',             // Any element with caption in class name
-    '[class*="subtitle"] span'             // Any element with subtitle in class name
+// This is the main, improved subtitle detection function that focuses on actual caption elements
+function findYouTubeSubtitles() {
+  // These are the EXACT selectors that YouTube uses for its subtitle text elements
+  const captionSelectors = [
+    // Primary modern YouTube caption selectors
+    '.ytp-caption-segment',                          // Most common current selector
+    '.captions-text > span',                         // Another common format
+    '.caption-visual-line .ytp-caption-segment',     // Structured captions
+    
+    // Additional backup selectors
+    '.ytp-caption-window-container [class*="caption"] span', // Fallback with wildcard
+    '.ytp-caption-window-container div span',               // Most generic
   ];
   
-  for (const selector of selectors) {
+  // Log that we're looking for subtitles in debug mode
+  log('Searching for YouTube caption elements...');
+  
+  // Try each selector
+  for (const selector of captionSelectors) {
     const elements = document.querySelectorAll(selector);
     if (elements && elements.length > 0) {
-      for (const element of elements) {
-        if (element && element.textContent && element.textContent.trim()) {
-          log(`Found subtitle element with selector: ${selector}`);
-          return element;
-        }
+      // Filter out empty elements or suspected metadata
+      const validElements = Array.from(elements).filter(el => {
+        // Must have content and not be too long (metadata is often very long)
+        const text = el.textContent?.trim();
+        const isValidLength = text && text.length > 0 && text.length < 300;
+        
+        // Check if element is visible and inside the video player
+        const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+        const videoPlayer = document.querySelector('.html5-video-player');
+        const isInPlayer = videoPlayer && videoPlayer.contains(el);
+        
+        return isValidLength && isVisible && isInPlayer;
+      });
+      
+      if (validElements.length > 0) {
+        log(`Found ${validElements.length} subtitle elements with selector: ${selector}`);
+        return validElements;
       }
     }
   }
   
-  // Log if not found for debugging
-  log('No subtitle element found with standard selectors');
+  // No subtitles found
+  log('No subtitle elements found with any selector');
   return null;
 }
 
-// Simplified function to extract subtitle text
+// Extract subtitle text from valid subtitle elements
 function getSubtitleText() {
-  const element = findSubtitleElement();
-  if (element && element.textContent) {
-    const text = element.textContent.trim();
-    if (text) {
-      log('Found subtitle text:', text);
-      return text;
-    }
+  const elements = findYouTubeSubtitles();
+  
+  if (!elements || elements.length === 0) {
+    return null;
   }
-  return null;
+  
+  // Combine text from all subtitle elements
+  const textParts = elements.map(el => el.textContent?.trim()).filter(Boolean);
+  if (textParts.length === 0) {
+    return null;
+  }
+  
+  const text = textParts.join(' ');
+  log('Extracted subtitle text:', text);
+  return text;
 }
 
 // Create the custom subtitles container
@@ -123,8 +148,8 @@ function createCustomSubtitlesContainer() {
   customSubtitlesContainer = document.createElement('div');
   customSubtitlesContainer.id = 'youtube-subtitle-customizer';
   customSubtitlesContainer.style.position = 'absolute';
-  customSubtitlesContainer.style.zIndex = '9999';
-  customSubtitlesContainer.style.bottom = '60px';
+  customSubtitlesContainer.style.zIndex = '10001'; // Higher than YouTube's controls
+  customSubtitlesContainer.style.bottom = '80px';
   customSubtitlesContainer.style.left = '0';
   customSubtitlesContainer.style.width = '100%';
   customSubtitlesContainer.style.pointerEvents = 'none';
@@ -133,7 +158,10 @@ function createCustomSubtitlesContainer() {
   customSubtitlesContainer.style.justifyContent = 'center';
   customSubtitlesContainer.style.transition = 'bottom 0.3s ease-in-out';
   
-  // Add to player container
+  // Add a data attribute for debugging and targeting
+  customSubtitlesContainer.setAttribute('data-custom-subtitles', 'true');
+  
+  // Find the video container and add our custom container
   const videoContainer = document.querySelector('.html5-video-container');
   if (videoContainer) {
     videoContainer.appendChild(customSubtitlesContainer);
@@ -145,9 +173,8 @@ function createCustomSubtitlesContainer() {
       player.appendChild(customSubtitlesContainer);
       log('Created custom subtitles container in player (fallback)');
     } else {
-      // Last resort: add to body
-      document.body.appendChild(customSubtitlesContainer);
-      log('Created custom subtitles container in body (last resort)');
+      log('Failed to find video container or player');
+      return null;
     }
   }
   
@@ -163,13 +190,21 @@ async function updateCustomSubtitles(subtitleText, style) {
   
   // If no container, create one
   if (!customSubtitlesContainer) {
-    createCustomSubtitlesContainer();
+    if (!createCustomSubtitlesContainer()) {
+      log('Failed to create custom subtitles container');
+      return false;
+    }
   }
   
   // If no text provided, try to get it
   if (!subtitleText) {
     subtitleText = getSubtitleText();
     if (!subtitleText) {
+      if (customSubtitlesContainer.innerHTML) {
+        log('No subtitle text found, keeping previous subtitle');
+      } else {
+        log('No subtitle text found');
+      }
       return false;
     }
   }
@@ -194,14 +229,14 @@ async function updateCustomSubtitles(subtitleText, style) {
       color: ${style.color};
       background-color: ${style.backgroundColor}${opacityHex};
       font-size: ${style.fontSize}px;
-      padding: 6px 10px;
+      padding: 8px 12px;
       border-radius: 4px;
       text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
       font-family: Arial, sans-serif;
       font-weight: bold;
       max-width: 80%;
       line-height: 1.3;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     ">
       ${subtitleText}
     </div>
@@ -227,51 +262,92 @@ function updateSubtitlePosition() {
     const theaterMode = document.querySelector('.html5-video-player.ytp-big-mode') !== null;
     const controlsShowing = document.querySelector('.ytp-chrome-bottom') !== null &&
                            !document.querySelector('.ytp-autohide');
+    const video = document.querySelector('video');
+    const isVideoPlaying = video && !video.paused && !video.ended;
     
-    // Adjust position based on player state
+    // Base position adjustment
+    let bottomPosition = 60;
+    
+    // Adjust for player state
     if (fullscreen) {
-      customSubtitlesContainer.style.bottom = controlsShowing ? '120px' : '80px';
+      bottomPosition = controlsShowing ? 120 : 80;
     } else if (theaterMode) {
-      customSubtitlesContainer.style.bottom = controlsShowing ? '100px' : '60px';
+      bottomPosition = controlsShowing ? 90 : 70;
     } else {
-      customSubtitlesContainer.style.bottom = controlsShowing ? '80px' : '40px';
+      bottomPosition = controlsShowing ? 80 : 60;
     }
     
-    log('Updated subtitle position. Fullscreen:', fullscreen, 'Theater:', theaterMode, 'Controls:', controlsShowing);
+    // Apply the position
+    customSubtitlesContainer.style.bottom = `${bottomPosition}px`;
+    
+    log('Updated subtitle position. Bottom:', bottomPosition);
   } catch (e) {
     log('Error updating subtitle position:', e);
   }
 }
 
-// Start checking for subtitles
-function startSubtitleCheck() {
-  // Stop any existing interval
-  if (subtitleCheckInterval) {
-    clearInterval(subtitleCheckInterval);
+// Check if video is ready and has subtitles enabled
+function checkIfSubtitlesEnabled() {
+  // Check for the presence of the CC button in an "on" state
+  const ccButton = document.querySelector('.ytp-subtitles-button');
+  if (ccButton) {
+    const isEnabled = ccButton.getAttribute('aria-pressed') === 'true';
+    log('CC button found, subtitles enabled:', isEnabled);
+    return isEnabled;
   }
   
-  // Start new interval
-  subtitleCheckInterval = setInterval(async () => {
-    const subtitleText = getSubtitleText();
-    if (subtitleText) {
-      updateCustomSubtitles(subtitleText);
-    }
-  }, 500); // Check every half second
-  
-  log('Started subtitle check interval');
+  // Alternative check: see if any caption elements exist
+  const captionElements = document.querySelector('.ytp-caption-segment');
+  const isEnabled = captionElements !== null;
+  log('Subtitle elements found:', isEnabled);
+  return isEnabled;
 }
 
-// Initialize position check interval
-function startPositionCheck() {
-  // Stop any existing interval
-  if (positionInterval) {
-    clearInterval(positionInterval);
+// Process video element and set up subtitle display
+function processVideo() {
+  const video = document.querySelector('video');
+  if (!video) {
+    log('No video element found');
+    return;
   }
+
+  log('Video element found, checking for subtitles');
   
-  // Start new interval
-  positionInterval = setInterval(updateSubtitlePosition, 1000);
-  
-  log('Started position check interval');
+  // Only proceed if subtitles appear to be enabled
+  if (checkIfSubtitlesEnabled()) {
+    log('Subtitles appear to be enabled, setting up custom overlay');
+    setupSubtitleObserver();
+    createCustomSubtitlesContainer();
+  } else {
+    log('Subtitles appear to be disabled, waiting for them to be enabled');
+  }
+}
+
+// Check frequently if video state changed (play/pause/etc)
+function startVideoCheck() {
+  if (videoCheckInterval) {
+    clearInterval(videoCheckInterval);
+  }
+
+  videoCheckInterval = setInterval(() => {
+    const video = document.querySelector('video');
+    if (video) {
+      if (video.paused) {
+        log('Video is paused');
+      } else if (video.ended) {
+        log('Video has ended');
+      } else {
+        // Check for subtitle text when video is playing
+        const subtitleText = getSubtitleText();
+        if (subtitleText) {
+          updateCustomSubtitles(subtitleText);
+        }
+      }
+    }
+    
+    // Also update subtitle position
+    updateSubtitlePosition();
+  }, 1000);
 }
 
 // Set up mutation observer to detect when subtitles appear
@@ -281,26 +357,60 @@ function setupSubtitleObserver() {
     subtitleObserver.disconnect();
   }
   
+  // Define subtitle container selectors (where subtitles appear)
+  const subtitleContainerSelectors = [
+    '.ytp-caption-window-container',
+    '.caption-window',
+    '.ytp-caption-window',
+    '.captions-text-track'
+  ];
+  
+  // Try to find a subtitle container to observe
+  let subtitleContainer = null;
+  for (const selector of subtitleContainerSelectors) {
+    subtitleContainer = document.querySelector(selector);
+    if (subtitleContainer) {
+      log(`Found subtitle container with selector: ${selector}`);
+      break;
+    }
+  }
+  
+  // If no specific container found, observe the video player
+  if (!subtitleContainer) {
+    subtitleContainer = document.querySelector('.html5-video-player') || document.body;
+    log('No specific subtitle container found, observing:', 
+      subtitleContainer === document.body ? 'document body' : 'video player');
+  }
+  
   // Create new observer
   subtitleObserver = new MutationObserver((mutations) => {
+    let subtitleFound = false;
+    
     for (const mutation of mutations) {
+      // Only process a few specific mutations
       if (mutation.type === 'childList' || mutation.type === 'characterData') {
         const subtitleText = getSubtitleText();
         if (subtitleText) {
+          subtitleFound = true;
           updateCustomSubtitles(subtitleText);
+          break;
         }
       }
     }
+    
+    if (subtitleFound) {
+      log('Detected subtitle change through MutationObserver');
+    }
   });
   
-  // Start observing
-  subtitleObserver.observe(document.body, {
+  // Start observing with appropriate options
+  subtitleObserver.observe(subtitleContainer, {
     childList: true,
     subtree: true,
     characterData: true
   });
   
-  log('Set up subtitle mutation observer');
+  log('Set up subtitle mutation observer on container');
 }
 
 // Clean up everything
@@ -310,9 +420,9 @@ function cleanup() {
     subtitleObserver = null;
   }
   
-  if (subtitleCheckInterval) {
-    clearInterval(subtitleCheckInterval);
-    subtitleCheckInterval = null;
+  if (videoCheckInterval) {
+    clearInterval(videoCheckInterval);
+    videoCheckInterval = null;
   }
   
   if (positionInterval) {
@@ -340,12 +450,17 @@ function forceRefresh() {
   // Set up everything again
   initialize();
   
-  // Force update
+  // Force immediate check for subtitles
   setTimeout(async () => {
+    log('Checking for subtitles after force refresh');
+    processVideo();
     const subtitleText = getSubtitleText();
     if (subtitleText) {
       const style = await loadStyles();
       updateCustomSubtitles(subtitleText, style);
+      log('Found subtitles after force refresh:', subtitleText);
+    } else {
+      log('No subtitles found after force refresh');
     }
   }, 500);
 }
@@ -356,17 +471,18 @@ function initialize() {
   
   // Get current video ID
   currentVideoId = getYouTubeVideoId();
+  log('Current video ID:', currentVideoId || 'No video ID found (might be homepage)');
   
-  // Create subtitles container
-  createCustomSubtitlesContainer();
-  
-  // Set up observers and intervals
-  setupSubtitleObserver();
-  startSubtitleCheck();
-  startPositionCheck();
-  
-  // Initial position update
-  updateSubtitlePosition();
+  // Process video if we're on a video page
+  if (currentVideoId) {
+    setTimeout(() => {
+      log('Processing video after short delay');
+      processVideo();
+      startVideoCheck();
+    }, 1500); // Give YouTube a moment to set up the player
+  } else {
+    log('Not on a video page, waiting for navigation');
+  }
   
   log('Initialization complete');
 }
@@ -384,7 +500,7 @@ const handleNavigation = () => {
     cleanup();
     
     // Short delay to allow YouTube to set up
-    setTimeout(initialize, 1000);
+    setTimeout(initialize, 1500);
   }
 };
 
@@ -437,7 +553,7 @@ const urlObserver = new MutationObserver(() => {
 // Watch for fullscreen changes
 document.addEventListener('fullscreenchange', updateSubtitlePosition);
 
-// Run when the page is ready
+// Initial check when YouTube's page has fully loaded
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initialize();
@@ -450,3 +566,4 @@ if (document.readyState === 'loading') {
 
 // Log that we've loaded
 log('Content script loaded successfully');
+
