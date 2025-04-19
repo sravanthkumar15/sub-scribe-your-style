@@ -166,19 +166,43 @@ function createCustomSubtitlesContainer() {
   if (videoContainer) {
     videoContainer.appendChild(customSubtitlesContainer);
     log('Created custom subtitles container in video container');
+    return customSubtitlesContainer;
   } else {
     // Fallback to player
     const player = document.querySelector('.html5-video-player');
     if (player) {
       player.appendChild(customSubtitlesContainer);
       log('Created custom subtitles container in player (fallback)');
+      return customSubtitlesContainer;
     } else {
       log('Failed to find video container or player');
       return null;
     }
   }
+}
+
+// Hide original subtitles if needed
+function hideOriginalSubtitles() {
+  // Add a style tag to hide YouTube's captions
+  let styleTag = document.getElementById('youtube-subtitle-customizer-styles');
   
-  return customSubtitlesContainer;
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'youtube-subtitle-customizer-styles';
+    document.head.appendChild(styleTag);
+  }
+  
+  // CSS to hide YouTube's caption container
+  styleTag.textContent = `
+    .ytp-caption-window-container, 
+    .captions-text, 
+    .ytp-caption-segment {
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+  `;
+  
+  log('Hidden original YouTube subtitles');
 }
 
 // Update the custom subtitles with text and styles
@@ -190,7 +214,8 @@ async function updateCustomSubtitles(subtitleText, style) {
   
   // If no container, create one
   if (!customSubtitlesContainer) {
-    if (!createCustomSubtitlesContainer()) {
+    customSubtitlesContainer = createCustomSubtitlesContainer();
+    if (!customSubtitlesContainer) {
       log('Failed to create custom subtitles container');
       return false;
     }
@@ -243,6 +268,10 @@ async function updateCustomSubtitles(subtitleText, style) {
   `;
   
   log('Updated custom subtitles with text:', subtitleText);
+  
+  // Make sure original subtitles are hidden
+  hideOriginalSubtitles();
+  
   return true;
 }
 
@@ -313,14 +342,14 @@ function processVideo() {
 
   log('Video element found, checking for subtitles');
   
-  // Only proceed if subtitles appear to be enabled
-  if (checkIfSubtitlesEnabled()) {
-    log('Subtitles appear to be enabled, setting up custom overlay');
-    setupSubtitleObserver();
-    createCustomSubtitlesContainer();
-  } else {
-    log('Subtitles appear to be disabled, waiting for them to be enabled');
-  }
+  // Always proceed with setup even if subtitles don't seem enabled yet
+  log('Setting up custom overlay and observers');
+  setupSubtitleObserver();
+  createCustomSubtitlesContainer();
+  hideOriginalSubtitles();
+  
+  // Start position update interval
+  startPositionUpdateInterval();
 }
 
 // Check frequently if video state changed (play/pause/etc)
@@ -348,6 +377,17 @@ function startVideoCheck() {
     // Also update subtitle position
     updateSubtitlePosition();
   }, 1000);
+}
+
+// Start interval to update subtitle position
+function startPositionUpdateInterval() {
+  if (positionInterval) {
+    clearInterval(positionInterval);
+  }
+  
+  // Update position more frequently to catch changes in player state
+  positionInterval = setInterval(updateSubtitlePosition, 200);
+  log('Started position update interval');
 }
 
 // Set up mutation observer to detect when subtitles appear
@@ -433,6 +473,12 @@ function cleanup() {
   if (customSubtitlesContainer) {
     customSubtitlesContainer.remove();
     customSubtitlesContainer = null;
+  }
+  
+  // Remove the style tag for hiding original subtitles
+  const styleTag = document.getElementById('youtube-subtitle-customizer-styles');
+  if (styleTag) {
+    styleTag.remove();
   }
   
   lastSubtitleText = '';
