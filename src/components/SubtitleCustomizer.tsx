@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw } from "lucide-react";
+import { RefreshCcw, Bug, X } from "lucide-react";
 
 // Define the type for our subtitle style
 interface SubtitleStyleType {
@@ -34,6 +34,8 @@ const SubtitleCustomizer = () => {
   });
   const [status, setStatus] = useState<string>("Ready");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [debugMode, setDebugMode] = useState<boolean>(false);
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   // Check if we're in a browser extension context
   const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage;
@@ -41,10 +43,13 @@ const SubtitleCustomizer = () => {
   // Load saved settings
   useEffect(() => {
     if (isChromeExtension) {
-      chrome.storage.sync.get(['subtitleStyle'], (result: ChromeStorageResult) => {
+      chrome.storage.sync.get(['subtitleStyle', 'debugMode'], (result: ChromeStorageResult) => {
         if (result.subtitleStyle) {
           setSubtitleStyle(result.subtitleStyle);
           setStatus("Settings loaded");
+        }
+        if (result.debugMode !== undefined) {
+          setDebugMode(result.debugMode);
         }
       });
     }
@@ -73,6 +78,46 @@ const SubtitleCustomizer = () => {
       toast({
         title: "Settings saved",
         description: "Your subtitle customization has been updated.",
+      });
+    }
+  };
+
+  // Toggle debug mode
+  const toggleDebugMode = () => {
+    const newDebugMode = !debugMode;
+    setDebugMode(newDebugMode);
+    
+    if (isChromeExtension) {
+      chrome.storage.sync.set({ debugMode: newDebugMode });
+      
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'TOGGLE_DEBUG',
+            enabled: newDebugMode
+          }, () => {
+            setStatus(newDebugMode ? "Debug mode enabled" : "Debug mode disabled");
+          });
+        }
+      });
+    }
+  };
+
+  // Request debug info from content script
+  const requestDebugInfo = () => {
+    if (isChromeExtension) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'REQUEST_DEBUG_INFO'
+          }, (response) => {
+            if (response && response.debugInfo) {
+              setDebugInfo(response.debugInfo);
+            } else {
+              setDebugInfo("No debug info available or content script not responding");
+            }
+          });
+        }
       });
     }
   };
@@ -171,6 +216,50 @@ const SubtitleCustomizer = () => {
             <RefreshCcw className="mr-2 h-4 w-4" />
             {isLoading ? "Refreshing..." : "Refresh Subtitles"}
           </Button>
+          
+          <div className="mt-4 flex items-center justify-between">
+            <Button 
+              variant={debugMode ? "default" : "outline"} 
+              size="sm"
+              onClick={toggleDebugMode}
+              className="text-xs"
+            >
+              <Bug className="mr-1 h-3 w-3" />
+              {debugMode ? "Debug Mode On" : "Debug Mode"}
+            </Button>
+            
+            {debugMode && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={requestDebugInfo}
+                className="text-xs"
+              >
+                Get Debug Info
+              </Button>
+            )}
+          </div>
+          
+          {debugMode && debugInfo && (
+            <div className="mt-2 p-2 bg-gray-900 rounded text-xs font-mono">
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-bold">Debug Info</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setDebugInfo("")} 
+                  className="h-5 w-5 p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="max-h-32 overflow-y-auto">
+                {debugInfo.split('\n').map((line, i) => (
+                  <div key={i}>{line}</div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="mt-4 text-xs text-gray-400">
             Status: {status} ({extensionStatus})
