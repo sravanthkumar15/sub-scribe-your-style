@@ -139,37 +139,30 @@ function createCustomSubtitlesContainer() {
   customSubtitlesContainer = document.createElement('div');
   customSubtitlesContainer.id = 'youtube-subtitle-customizer';
   customSubtitlesContainer.style.position = 'absolute';
-  customSubtitlesContainer.style.zIndex = '10001'; // Higher than YouTube's controls
-  customSubtitlesContainer.style.bottom = '80px';
-  customSubtitlesContainer.style.left = '0';
-  customSubtitlesContainer.style.width = '100%';
-  customSubtitlesContainer.style.pointerEvents = 'none';
-  customSubtitlesContainer.style.textAlign = 'center';
+  customSubtitlesContainer.style.zIndex = '1000000'; // Very high to ensure it's on top
+  customSubtitlesContainer.style.bottom = '80px';  // Position above controls
+  customSubtitlesContainer.style.left = '50%';     // Center horizontally
+  customSubtitlesContainer.style.transform = 'translateX(-50%)'; // Center alignment
+  customSubtitlesContainer.style.width = 'auto';   // Let content determine width
+  customSubtitlesContainer.style.maxWidth = '90%'; // Don't get too wide
+  customSubtitlesContainer.style.pointerEvents = 'none'; // Don't block video clicks
   customSubtitlesContainer.style.display = 'flex';
   customSubtitlesContainer.style.justifyContent = 'center';
-  customSubtitlesContainer.style.transition = 'bottom 0.3s ease-in-out';
+  customSubtitlesContainer.style.transition = 'all 0.3s ease';
   
-  // Add a data attribute for debugging and targeting
+  // Add a data attribute for debugging
   customSubtitlesContainer.setAttribute('data-custom-subtitles', 'true');
   
   // Find the video container and add our custom container
-  const videoContainer = document.querySelector('.html5-video-container');
-  if (videoContainer) {
-    videoContainer.appendChild(customSubtitlesContainer);
-    log('Created custom subtitles container in video container');
+  const videoPlayer = document.querySelector('.html5-video-player');
+  if (videoPlayer) {
+    videoPlayer.appendChild(customSubtitlesContainer);
+    log('Created custom subtitles container');
     return customSubtitlesContainer;
-  } else {
-    // Fallback to player
-    const player = document.querySelector('.html5-video-player');
-    if (player) {
-      player.appendChild(customSubtitlesContainer);
-      log('Created custom subtitles container in player (fallback)');
-      return customSubtitlesContainer;
-    } else {
-      log('Failed to find video container or player');
-      return null;
-    }
   }
+  
+  log('Failed to find video player');
+  return null;
 }
 
 // Hide original subtitles if needed
@@ -246,25 +239,46 @@ async function updateCustomSubtitles(subtitleText, style) {
     .toString(16)
     .padStart(2, '0');
   
-  // Update container content
+  // Update container content with better styling
   customSubtitlesContainer.innerHTML = `
     <div style="
       display: inline-block;
       color: ${style.color};
       background-color: ${style.backgroundColor}${opacityHex};
       font-size: ${style.fontSize}px;
-      padding: 8px 12px;
+      padding: 4px 8px;
       border-radius: 4px;
-      text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
-      font-family: Arial, sans-serif;
-      font-weight: bold;
-      max-width: 80%;
-      line-height: 1.3;
-      margin-bottom: 10px;
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.5);
+      font-family: 'YouTube Noto', Roboto, Arial, sans-serif;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: pre-line;
+      text-align: center;
+      transform-origin: center bottom;
+      animation: subtitleFadeIn 0.3s ease-out;
     ">
       ${subtitleText}
     </div>
   `;
+  
+  // Add animation styles if not already present
+  if (!document.getElementById('subtitle-animations')) {
+    const style = document.createElement('style');
+    style.id = 'subtitle-animations';
+    style.textContent = `
+      @keyframes subtitleFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
   
   log('Updated custom subtitles with text:', subtitleText);
   
