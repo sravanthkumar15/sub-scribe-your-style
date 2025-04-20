@@ -17,9 +17,11 @@ function log(...args) {
 let customSubtitlesContainer = null;
 let currentVideoId = null;
 let lastSubtitleText = '';
+let lastSubtitleTimestamp = 0;
 let subtitleObserver = null;
 let positionInterval = null;
 let videoCheckInterval = null;
+let activeSubtitleTimeout = null;
 
 // Default styles
 const defaultSubtitleStyle = {
@@ -142,11 +144,11 @@ function createCustomSubtitlesContainer() {
   customSubtitlesContainer.style.left = '50%';
   customSubtitlesContainer.style.transform = 'translateX(-50%)';
   customSubtitlesContainer.style.width = 'auto';
-  customSubtitlesContainer.style.maxWidth = '80%';
+  customSubtitlesContainer.style.maxWidth = '70%'; // Reduced max width for better readability
   customSubtitlesContainer.style.pointerEvents = 'none';
   customSubtitlesContainer.style.display = 'flex';
   customSubtitlesContainer.style.justifyContent = 'center';
-  customSubtitlesContainer.style.transition = 'all 0.3s ease';
+  customSubtitlesContainer.style.transition = 'all 0.2s ease';
   
   customSubtitlesContainer.setAttribute('data-custom-subtitles', 'true');
   
@@ -185,6 +187,44 @@ function hideOriginalSubtitles() {
   log('Hidden original YouTube subtitles');
 }
 
+// Process subtitles to make them more readable
+function processSubtitleText(text) {
+  if (!text) return null;
+  
+  // Remove redundant punctuation that makes text harder to read
+  text = text
+    .replace(/\.{3,}/g, '...') // Normalize ellipses
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim();
+  
+  // Limit subtitle length (if it's too long, show only the last portion)
+  const maxLength = 100;
+  if (text.length > maxLength) {
+    // Find a good breaking point near the end (sentence or phrase)
+    const breakPoints = ['. ', '! ', '? ', ', ', ': ', '; ', ' - '];
+    let breakIndex = -1;
+    
+    // Start from half of the text to find a good breaking point
+    const startSearchAt = Math.floor(text.length / 2);
+    
+    for (const breakPoint of breakPoints) {
+      const index = text.lastIndexOf(breakPoint, text.length - 1);
+      if (index > startSearchAt && (breakIndex === -1 || index > breakIndex)) {
+        breakIndex = index + breakPoint.length - 1;
+      }
+    }
+    
+    // If we found a good breaking point, use it; otherwise, just truncate
+    if (breakIndex > startSearchAt) {
+      text = text.substring(breakIndex);
+    } else {
+      text = '...' + text.substring(text.length - maxLength);
+    }
+  }
+  
+  return text;
+}
+
 // Update the custom subtitles with text and styles
 async function updateCustomSubtitles(subtitleText, style) {
   // If no style provided, load from storage
@@ -205,19 +245,38 @@ async function updateCustomSubtitles(subtitleText, style) {
   if (!subtitleText) {
     subtitleText = getSubtitleText();
     if (!subtitleText) {
-      if (customSubtitlesContainer.innerHTML) {
-        log('No subtitle text found, keeping previous subtitle');
-      } else {
-        log('No subtitle text found');
-      }
+      // Don't clear previous subtitle immediately to prevent flickering
       return false;
     }
   }
   
-  // Skip if it's the same as last time
+  // Process the subtitle text to make it more readable
+  subtitleText = processSubtitleText(subtitleText);
+  if (!subtitleText) return false;
+  
+  // Skip if it's the same as last time to prevent flickering
   if (subtitleText === lastSubtitleText) {
     return false;
   }
+  
+  // Update subtitle freshness (used for auto-clearing)
+  const now = Date.now();
+  lastSubtitleTimestamp = now;
+  
+  // Clear any previous timeout for removing subtitles
+  if (activeSubtitleTimeout) {
+    clearTimeout(activeSubtitleTimeout);
+  }
+  
+  // Set a timeout to clear subtitles if they don't update for a while
+  activeSubtitleTimeout = setTimeout(() => {
+    if (Date.now() - lastSubtitleTimestamp > 5000) {
+      // If no new subtitles for 5 seconds, clear the display
+      if (customSubtitlesContainer) {
+        customSubtitlesContainer.innerHTML = '';
+      }
+    }
+  }, 5000);
   
   // Update last text
   lastSubtitleText = subtitleText;
@@ -241,20 +300,20 @@ async function updateCustomSubtitles(subtitleText, style) {
       color: ${style.color};
       background-color: ${style.backgroundColor}${opacityHex};
       font-size: ${style.fontSize}px;
-      padding: 6px 10px;
-      border-radius: 4px;
-      text-shadow: 0px 1px 2px rgba(0,0,0,0.8);
-      -webkit-text-stroke: 0.5px rgba(0,0,0,0.5);
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-shadow: 0px 2px 3px rgba(0,0,0,0.9);
+      -webkit-text-stroke: 0.7px rgba(0,0,0,0.6);
       font-family: 'YouTube Noto', Roboto, Arial, sans-serif;
       font-weight: 600;
-      line-height: 1.4;
+      line-height: 1.3;
       white-space: pre-line;
       text-align: center;
       transform-origin: center bottom;
-      animation: subtitleFadeIn 0.3s ease-out;
-      letter-spacing: 0.2px;
+      animation: subtitleFadeIn 0.2s ease-out;
+      letter-spacing: 0.3px;
       max-width: 100%;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
     ">
       ${subtitleText}
     </div>
@@ -267,8 +326,8 @@ async function updateCustomSubtitles(subtitleText, style) {
     style.textContent = `
       @keyframes subtitleFadeIn {
         from {
-          opacity: 0;
-          transform: translateY(10px) scale(0.98);
+          opacity: 0.7;
+          transform: translateY(5px) scale(0.98);
         }
         to {
           opacity: 1;
@@ -402,18 +461,13 @@ function startVideoCheck() {
         const subtitleText = getSubtitleText();
         if (subtitleText) {
           updateCustomSubtitles(subtitleText);
-        } else {
-          // If no natural subtitles found, show a test one occasionally
-          if (Math.random() < 0.1) { // 10% chance each check
-            showTestSubtitle();
-          }
         }
       }
     }
     
     // Also update subtitle position
     updateSubtitlePosition();
-  }, 1000);
+  }, 500); // Check more frequently (reduced from 1000ms to 500ms)
 }
 
 // Start interval to update subtitle position
@@ -459,24 +513,22 @@ function setupSubtitleObserver() {
       subtitleContainer === document.body ? 'document body' : 'video player');
   }
   
-  // Create new observer
+  // Create new observer with subtle debounce
+  let pendingSubtitleUpdate = false;
+  
   subtitleObserver = new MutationObserver((mutations) => {
-    let subtitleFound = false;
-    
-    for (const mutation of mutations) {
-      // Only process a few specific mutations
-      if (mutation.type === 'childList' || mutation.type === 'characterData') {
+    if (!pendingSubtitleUpdate) {
+      pendingSubtitleUpdate = true;
+      
+      // Slight delay to batch multiple rapid changes together
+      setTimeout(() => {
         const subtitleText = getSubtitleText();
         if (subtitleText) {
-          subtitleFound = true;
           updateCustomSubtitles(subtitleText);
-          break;
+          log('Updated subtitles after change detection');
         }
-      }
-    }
-    
-    if (subtitleFound) {
-      log('Detected subtitle change through MutationObserver');
+        pendingSubtitleUpdate = false;
+      }, 50); // Very small delay to batch changes
     }
   });
   
