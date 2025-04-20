@@ -130,30 +130,26 @@ function getSubtitleText() {
 
 // Create the custom subtitles container
 function createCustomSubtitlesContainer() {
-  // Remove existing container if present
   if (customSubtitlesContainer) {
     customSubtitlesContainer.remove();
   }
   
-  // Create new container
   customSubtitlesContainer = document.createElement('div');
   customSubtitlesContainer.id = 'youtube-subtitle-customizer';
   customSubtitlesContainer.style.position = 'absolute';
-  customSubtitlesContainer.style.zIndex = '1000000'; // Very high to ensure it's on top
-  customSubtitlesContainer.style.bottom = '80px';  // Position above controls
-  customSubtitlesContainer.style.left = '50%';     // Center horizontally
-  customSubtitlesContainer.style.transform = 'translateX(-50%)'; // Center alignment
-  customSubtitlesContainer.style.width = 'auto';   // Let content determine width
-  customSubtitlesContainer.style.maxWidth = '90%'; // Don't get too wide
-  customSubtitlesContainer.style.pointerEvents = 'none'; // Don't block video clicks
+  customSubtitlesContainer.style.zIndex = '1000000';
+  customSubtitlesContainer.style.bottom = '80px';
+  customSubtitlesContainer.style.left = '50%';
+  customSubtitlesContainer.style.transform = 'translateX(-50%)';
+  customSubtitlesContainer.style.width = 'auto';
+  customSubtitlesContainer.style.maxWidth = '80%';
+  customSubtitlesContainer.style.pointerEvents = 'none';
   customSubtitlesContainer.style.display = 'flex';
   customSubtitlesContainer.style.justifyContent = 'center';
   customSubtitlesContainer.style.transition = 'all 0.3s ease';
   
-  // Add a data attribute for debugging
   customSubtitlesContainer.setAttribute('data-custom-subtitles', 'true');
   
-  // Find the video container and add our custom container
   const videoPlayer = document.querySelector('.html5-video-player');
   if (videoPlayer) {
     videoPlayer.appendChild(customSubtitlesContainer);
@@ -239,23 +235,26 @@ async function updateCustomSubtitles(subtitleText, style) {
     .toString(16)
     .padStart(2, '0');
   
-  // Update container content with better styling
   customSubtitlesContainer.innerHTML = `
     <div style="
       display: inline-block;
       color: ${style.color};
       background-color: ${style.backgroundColor}${opacityHex};
       font-size: ${style.fontSize}px;
-      padding: 4px 8px;
+      padding: 6px 10px;
       border-radius: 4px;
-      text-shadow: 0px 1px 2px rgba(0,0,0,0.5);
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.8);
+      -webkit-text-stroke: 0.5px rgba(0,0,0,0.5);
       font-family: 'YouTube Noto', Roboto, Arial, sans-serif;
-      font-weight: 500;
+      font-weight: 600;
       line-height: 1.4;
       white-space: pre-line;
       text-align: center;
       transform-origin: center bottom;
       animation: subtitleFadeIn 0.3s ease-out;
+      letter-spacing: 0.2px;
+      max-width: 100%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     ">
       ${subtitleText}
     </div>
@@ -269,11 +268,11 @@ async function updateCustomSubtitles(subtitleText, style) {
       @keyframes subtitleFadeIn {
         from {
           opacity: 0;
-          transform: translateY(10px);
+          transform: translateY(10px) scale(0.98);
         }
         to {
           opacity: 1;
-          transform: translateY(0);
+          transform: translateY(0) scale(1);
         }
       }
     `;
