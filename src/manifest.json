@@ -6,6 +6,9 @@
   "description": "Customize YouTube subtitles with custom colors, sizes, and highlighting",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["*://*.youtube.com/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "action": {
     "default_popup": "index.html",
     "default_icon": {
