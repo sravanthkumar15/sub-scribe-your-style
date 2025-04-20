@@ -143,12 +143,11 @@ function createCustomSubtitlesContainer() {
   customSubtitlesContainer.style.bottom = '80px';
   customSubtitlesContainer.style.left = '50%';
   customSubtitlesContainer.style.transform = 'translateX(-50%)';
-  customSubtitlesContainer.style.width = 'auto';
-  customSubtitlesContainer.style.maxWidth = '70%'; // Reduced max width for better readability
+  customSubtitlesContainer.style.minWidth = 'auto';
+  customSubtitlesContainer.style.maxWidth = '90%';
   customSubtitlesContainer.style.pointerEvents = 'none';
-  customSubtitlesContainer.style.display = 'flex';
-  customSubtitlesContainer.style.justifyContent = 'center';
-  customSubtitlesContainer.style.transition = 'all 0.2s ease';
+  customSubtitlesContainer.style.display = 'inline-block';
+  customSubtitlesContainer.style.transition = 'width 0.2s ease-out';
   
   customSubtitlesContainer.setAttribute('data-custom-subtitles', 'true');
   
@@ -268,15 +267,55 @@ async function updateCustomSubtitles(subtitleText, style) {
     clearTimeout(activeSubtitleTimeout);
   }
   
-  // Set a timeout to clear subtitles if they don't update for a while
+  // Convert opacity percentage to hex
+  const opacityHex = Math.round(style.backgroundOpacity * 2.55)
+    .toString(16)
+    .padStart(2, '0');
+
+  // Create the subtitle element with dynamic sizing
+  customSubtitlesContainer.innerHTML = `
+    <div style="
+      display: inline-block;
+      color: ${style.color};
+      background-color: ${style.backgroundColor}${opacityHex};
+      font-size: ${style.fontSize}px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-shadow: 
+        0px 1px 2px rgba(0,0,0,0.9),
+        0px 1px 4px rgba(0,0,0,0.4);
+      -webkit-text-stroke: 0.6px rgba(0,0,0,0.5);
+      font-family: 'YouTube Noto', Roboto, Arial, sans-serif;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: pre-wrap;
+      text-align: center;
+      width: fit-content;
+      transition: all 0.15s ease-out;
+      letter-spacing: 0.2px;
+      margin: 0 auto;
+    ">
+      ${subtitleText}
+    </div>
+  `;
+
+  // Add a small delay to allow the container to adjust to the new content
+  requestAnimationFrame(() => {
+    const subtitleElement = customSubtitlesContainer.firstElementChild;
+    if (subtitleElement) {
+      // Set the container width to match the content exactly
+      customSubtitlesContainer.style.width = subtitleElement.offsetWidth + 'px';
+    }
+  });
+  
+  // Set timeout to clear old subtitles
   activeSubtitleTimeout = setTimeout(() => {
-    if (Date.now() - lastSubtitleTimestamp > 5000) {
-      // If no new subtitles for 5 seconds, clear the display
+    if (Date.now() - lastSubtitleTimestamp > 3000) {
       if (customSubtitlesContainer) {
         customSubtitlesContainer.innerHTML = '';
       }
     }
-  }, 5000);
+  }, 3000);
   
   // Update last text
   lastSubtitleText = subtitleText;
@@ -288,57 +327,6 @@ async function updateCustomSubtitles(subtitleText, style) {
       text: subtitleText
     });
   }
-  
-  // Convert opacity percentage to hex
-  const opacityHex = Math.round(style.backgroundOpacity * 2.55)
-    .toString(16)
-    .padStart(2, '0');
-  
-  customSubtitlesContainer.innerHTML = `
-    <div style="
-      display: inline-block;
-      color: ${style.color};
-      background-color: ${style.backgroundColor}${opacityHex};
-      font-size: ${style.fontSize}px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-shadow: 0px 2px 3px rgba(0,0,0,0.9);
-      -webkit-text-stroke: 0.7px rgba(0,0,0,0.6);
-      font-family: 'YouTube Noto', Roboto, Arial, sans-serif;
-      font-weight: 600;
-      line-height: 1.3;
-      white-space: pre-line;
-      text-align: center;
-      transform-origin: center bottom;
-      animation: subtitleFadeIn 0.2s ease-out;
-      letter-spacing: 0.3px;
-      max-width: 100%;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-    ">
-      ${subtitleText}
-    </div>
-  `;
-  
-  // Add animation styles if not already present
-  if (!document.getElementById('subtitle-animations')) {
-    const style = document.createElement('style');
-    style.id = 'subtitle-animations';
-    style.textContent = `
-      @keyframes subtitleFadeIn {
-        from {
-          opacity: 0.7;
-          transform: translateY(5px) scale(0.98);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
-  log('Updated custom subtitles with text:', subtitleText);
   
   // Make sure original subtitles are hidden
   hideOriginalSubtitles();
